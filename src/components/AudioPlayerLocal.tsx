@@ -80,6 +80,13 @@ interface AudioPlayerLocalProps {
      * second, divergent guess.
      */
     averageSecondsPerWordBySurah?: Record<number, number> | null;
+    /**
+     * Reports the Basmala interstitial between surahs. While it plays,
+     * `nextVerseIndex` is the verse that will start when it ends (usually the
+     * first ayah of the next surah), so host views can preview that verse
+     * during the transition. Null when the Basmala ends or is cancelled.
+     */
+    onBasmalaChange?: (playing: boolean, nextVerseIndex: number | null) => void;
 }
 
 const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2, 2.5, 3];
@@ -148,6 +155,7 @@ export default function AudioPlayerLocal({
     defaultReciterId,
     onReciterChange,
     averageSecondsPerWordBySurah,
+    onBasmalaChange,
 }: AudioPlayerLocalProps) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -195,6 +203,19 @@ export default function AudioPlayerLocal({
     // (which already holds the user gesture) instead of being skipped.
     const basmalaViaMainNextIndexRef = useRef<number | null>(null);
     const basmalaViaMainEndRef = useRef<number | null>(null);
+    // Surface the Basmala interstitial to the host view so it can preview the
+    // verse that follows (usually the first ayah of the next surah) while the
+    // Basmala is audible.
+    const onBasmalaChangeRef = useRef(onBasmalaChange);
+    useEffect(() => { onBasmalaChangeRef.current = onBasmalaChange; });
+    useEffect(() => {
+        if (isBasmalaPlaying) {
+            const nextIndex = basmalaPendingNextIndexRef.current ?? basmalaViaMainNextIndexRef.current;
+            onBasmalaChangeRef.current?.(true, nextIndex ?? null);
+        } else {
+            onBasmalaChangeRef.current?.(false, null);
+        }
+    }, [isBasmalaPlaying]);
     // Pre-warmed Basmala audio (url + slice) resolved while the current verse
     // plays, so the surah-transition handoff has no async gap.
     const basmalaPrewarmRef = useRef<{ reciterId: string; url: string; startTime: number; endTime: number | null } | null>(null);
@@ -1412,7 +1433,6 @@ export default function AudioPlayerLocal({
                 </div>
             <div className="player-controls">
                 <div className="time-display">
-                    {isBasmalaPlaying && <span className="time-basmala" title="Basmala before the next surah">بِسْمِ ٱللَّهِ...</span>}
                     {elapsedTotalSec !== null && totalDurationSec !== null ? (
                         <>
                             <span className="time-elapsed-total">{formatTime(elapsedTotalSec)} / {formatTime(totalDurationSec)}</span>

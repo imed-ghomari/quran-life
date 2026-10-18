@@ -80,6 +80,13 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   const [listeningComplete, setListeningComplete] = useState(false);
   const [toast, setToast] = useState<{ id: string; msg: string } | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
+  // Verse shown in the preview while the Basmala interstitial between surahs
+  // plays: the verse that STARTS after it (usually a new surah), so the user
+  // sees where they are heading during the transition. Null outside Basmala.
+  const [basmalaPreviewIndex, setBasmalaPreviewIndex] = useState<number | null>(null);
+  const handleBasmalaChange = useCallback((playing: boolean, nextVerseIndex: number | null) => {
+    setBasmalaPreviewIndex(playing && nextVerseIndex !== null ? nextVerseIndex : null);
+  }, []);
   // Live player speed (picked in the player or Settings). The portion is sized
   // in 1x-minutes = target × speed, so this must track the actual playback
   // speed — not just the settings snapshot, which only updates from the
@@ -139,6 +146,26 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     return getSurahsByPart(settings.activePart).filter(s => !skipped.has(s.id));
   }, [settings.activePart, settings.skippedSurahs]);
 
+  // The portion is sized with the playback speed that was live when the
+  // portion STARTED (anchor = part/mode/target/skipped surahs/progress). A
+  // speed change mid-portion must NOT resize today's portion: the resize
+  // changes the portion key and resets the player back to the first verse.
+  // The next portion picks the live speed up again (captured below).
+  const portionAnchorKey = useMemo(() => {
+    const skipped = (settings.skippedSurahs || []).join(',');
+    const anchor = activeProgress?.nextStartVerseKey
+      || `legacy:${activeProgress?.lastVerseIndex ?? -1}:${activeProgress?.cycles ?? 0}`;
+    return [settings.activePart, skipped, settings.dailyTargetMinutes, settings.dailyPortionMode ?? 'audio', anchor].join('|');
+  }, [settings.activePart, settings.skippedSurahs, settings.dailyTargetMinutes, settings.dailyPortionMode, activeProgress?.nextStartVerseKey, activeProgress?.lastVerseIndex, activeProgress?.cycles]);
+  const [portionSizingSpeed, setPortionSizingSpeed] = useState<number>(() => readLivePlaybackSpeed());
+  const lastPortionAnchorRef = useRef(portionAnchorKey);
+  if (lastPortionAnchorRef.current !== portionAnchorKey) {
+    // New portion boundary (day/cycle/settings/undo) — size it with the speed
+    // the user is listening at right now.
+    lastPortionAnchorRef.current = portionAnchorKey;
+    setPortionSizingSpeed(livePlaybackSpeed);
+  }
+
   const portionData = useMemo(() => {
     if (allVerses.length === 0) {
       return {
@@ -192,10 +219,11 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
       nextStartVerseKey: activeProgress?.nextStartVerseKey,
       legacyStartIndex: startIdx,
       averageSecondsPerWordBySurah: sizingSecondsPerWord,
-      // Wall-clock target: the sizer scales audio portions by the LIVE player
-      // speed so the player's total (1x durations ÷ speed) matches the daily
-      // target. E.g. 10 min at 2x sizes ~20 1x-minutes of verses.
-      playbackSpeed: settings.dailyPortionMode === 'reading' ? 1 : livePlaybackSpeed,
+      // Wall-clock target: the sizer scales audio portions by the speed that
+      // was live when the portion started, so a portion listens in about the
+      // daily target at the speed the user is on. Mid-portion speed changes
+      // deliberately do NOT re-size it (they would reset the player).
+      playbackSpeed: settings.dailyPortionMode === 'reading' ? 1 : portionSizingSpeed,
     });
     return {
       portion: portionResult.portion,
@@ -209,7 +237,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
       snappedMinutes: portionResult.snappedMinutes,
       lastUpdateAt: activeProgress?.updatedAt,
     };
-  }, [allVerses, sizingSecondsPerWord, settings.dailyTargetMinutes, settings.dailyPortionMode, livePlaybackSpeed, eligibleSurahs, activeProgress]);
+  }, [allVerses, sizingSecondsPerWord, settings.dailyTargetMinutes, settings.dailyPortionMode, portionSizingSpeed, eligibleSurahs, activeProgress]);
 
   // Initialize listeningComplete based on progress date.
   // Progress written by this build records `completedOnDay` explicitly, so
@@ -261,9 +289,15 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   }, [portionData]);
 
   const currentDailyVerse = todaysPortion[currentVerseIndex] ?? null;
+  // While the Basmala interstitial plays, the preview switches to the verse
+  // that starts after it (the new surah) even though the player's position is
+  // still the verse that just finished.
+  const basmalaPreviewVerse = basmalaPreviewIndex !== null ? (todaysPortion[basmalaPreviewIndex] ?? null) : null;
+  const displayedVerse = basmalaPreviewVerse ?? currentDailyVerse;
+  const displayedVerseIndex = basmalaPreviewVerse && basmalaPreviewIndex !== null ? basmalaPreviewIndex : currentVerseIndex;
   // Display words keep mushaf ornaments (۞/۩) for rendering; highlight words
   // exclude them so segment indices line up 1:1 with recitation timings.
-  const dailyDisplayWords = useMemo(() => splitVerseDisplayWords(currentDailyVerse?.text ?? ''), [currentDailyVerse?.text]);
+  const dailyDisplayWords = useMemo(() => splitVerseDisplayWords(displayedVerse?.text ?? ''), [displayedVerse?.text]);
   const dailyHighlightWordCount = useMemo(() => splitVerseHighlightWords(currentDailyVerse?.text ?? '').length, [currentDailyVerse?.text]);
   const dailyDisplayToHighlight = useMemo(() => mapDisplayToHighlightIndices(dailyDisplayWords), [dailyDisplayWords]);
   const handleAudioWordIndexChange = useCallback((index: number) => {
@@ -359,11 +393,13 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     }
   };
 
-  // Reset stale word refs/highlight when the verse changes (refs are indexed
-  // by highlight-word position, so a longer previous verse must not linger).
+  // Reset stale word refs/highlight when the displayed verse changes (refs are
+  // indexed by highlight-word position, so a longer previous verse must not
+  // linger). Keyed to the displayed verse so the Basmala preview hand-off also
+  // clears them.
   useEffect(() => {
     wordElementRefs.current = [];
-  }, [currentDailyVerse?.surahId, currentDailyVerse?.ayahId]);
+  }, [displayedVerse?.surahId, displayedVerse?.ayahId]);
 
   // Smooth scroll for audio word highlight
   useEffect(() => {
@@ -464,7 +500,6 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     .quran-life-daily .progress-fill { height: 100%; background: var(--interactive-accent); transition: width 0.2s; }
     .quran-life-daily .player-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
     .quran-life-daily .time-display { font-size: 0.78em; color: var(--text-muted); font-weight: 500; font-variant-numeric: tabular-nums; }
-    .quran-life-daily .time-basmala { font-family: var(--font-text, serif); color: color-mix(in srgb, var(--interactive-accent) 55%, var(--text-muted)); white-space: nowrap; }
     .quran-life-daily .time-remaining { opacity: 0.7; }
     .quran-life-daily .undo-complete-btn { border-color: var(--interactive-accent); color: var(--interactive-accent); }
     .quran-life-daily .control-buttons { display: flex; gap: 6px; align-items: center; }
@@ -583,6 +618,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                       currentVerseWordCount={dailyHighlightWordCount}
                       onVerseChange={setCurrentVerseIndex}
                       onWordIndexChange={handleAudioWordIndexChange}
+                      onBasmalaChange={handleBasmalaChange}
                       obsidianApp={vaultStore?.app}
                       averageSecondsPerWordBySurah={sizingSecondsPerWord}
                       defaultReciterId={settings.dailyReciterId}
@@ -609,14 +645,14 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                     gap:8,
                   }}
                 >
-                  {currentDailyVerse ? (
+                  {displayedVerse ? (
                     <>
                       <div style={{ fontSize:'0.78em', color:'var(--text-muted)', fontWeight:600, letterSpacing:'0.02em' }}>
-                        {getSurah(currentDailyVerse.surahId)?.arabicName} • Ayah {currentDailyVerse.ayahId}
+                        {getSurah(displayedVerse.surahId)?.arabicName} • Ayah {displayedVerse.ayahId}
                       </div>
-                      {(currentDailyVerse.ayahId === 1 ? (currentDailyVerse.surahId !== 1 && currentDailyVerse.surahId !== 9) : currentVerseIndex === 0) ? (
+                      {(displayedVerse.ayahId === 1 ? (displayedVerse.surahId !== 1 && displayedVerse.surahId !== 9) : displayedVerseIndex === 0) ? (
                         <div style={{ fontFamily:'var(--font-text, serif)', textAlign:'center', color:'var(--text-muted)', fontSize:'1.05em', padding:'4px 0', borderBottom:'1px dashed var(--background-modifier-border)', marginBottom:4 }}>
-                          {currentDailyVerse.ayahId === 1 ? 'بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ' : 'أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ'}
+                          {displayedVerse.ayahId === 1 ? 'بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ' : 'أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ'}
                         </div>
                       ) : null}
                       <div style={{ fontFamily:'var(--font-text, serif)', fontSize:'1.20em', lineHeight:2, direction:'rtl', textAlign:'right', color:'var(--text-normal)' }}>
