@@ -1,6 +1,6 @@
 {
   "name": "quran-reader",
-  "version": "1.0.30",
+  "version": "1.0.31",
   "private": true,
   "scripts": {
     "dev": "node esbuild.config.mjs",
