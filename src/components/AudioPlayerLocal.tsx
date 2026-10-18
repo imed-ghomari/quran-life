@@ -944,10 +944,17 @@ export default function AudioPlayerLocal({
     const handleTimeUpdate = useCallback(() => {
         if (audioRef.current) {
             const current = audioRef.current.currentTime;
-            // Keep the visual progress moving even while the track is finalizing
-            // a seek/buffer handoff (common with offline mobile Blob URLs).
-            setElapsedTime(current);
-            lastStableTimeRef.current = current;
+            // While a Basmala slice plays through the main element (mobile
+            // autoplay fallback), the element's clock belongs to the Basmala
+            // audio, not the portion. Keep the portion readout frozen at the
+            // completed verse instead of following the interstitial audio.
+            const basmalaInterstitial = isBasmalaPlayingRef.current || basmalaViaMainNextIndexRef.current !== null;
+            if (!basmalaInterstitial) {
+                // Keep the visual progress moving even while the track is finalizing
+                // a seek/buffer handoff (common with offline mobile Blob URLs).
+                setElapsedTime(current);
+                lastStableTimeRef.current = current;
+            }
             if (pendingTrackRef.current || isAudioPreparing || !isAudioReady) return;
             if (maybeAdvanceVerse(current)) return;
             let nextIndex: number | null = null;
@@ -1219,8 +1226,8 @@ export default function AudioPlayerLocal({
         try { window.dispatchEvent(new CustomEvent(PLAYBACK_SPEED_EVENT, { detail: { speed: newSpeed } })); } catch { /* no listeners */ }
     };
 
-    // Follow the default speed picked in Settings → Daily portion (same storage key,
-    // durations stay divided by speed exactly like the total/remaining readout).
+    // Follow the default speed picked in Settings → Daily portion (same storage key;
+    // elapsed/total stay in audio time, only the remaining estimate scales with speed).
     useEffect(() => {
         const handler = (e: Event) => {
             try {
@@ -1296,7 +1303,13 @@ export default function AudioPlayerLocal({
         });
     }, [selectedReciter, verses, recitationData, recitationDataMap, verseWordCounts, measuredAudioDurations, averageSecondsPerWordBySurah]);
 
-    const totalDurationSec = useMemo(() => { if (!verseDurationsSec) return null; const sum = verseDurationsSec.reduce((sum, d) => sum + (d || 0), 0); if (!(sum > 0)) return null; const s = speed || 1; return sum / s; }, [verseDurationsSec, speed]);
+    // Elapsed / total are in AUDIO time (the position inside the portion and
+    // its length). They must not depend on the playback speed: dividing them
+    // by the current speed rescaled the whole past retroactively, so switching
+    // speed made the readout collapse backwards (to 0:00 near the start) even
+    // though playback kept its position. Only the remaining-time estimate is
+    // speed-aware — that is the number that should change with speed.
+    const totalDurationSec = useMemo(() => { if (!verseDurationsSec) return null; const sum = verseDurationsSec.reduce((sum, d) => sum + (d || 0), 0); if (!(sum > 0)) return null; return sum; }, [verseDurationsSec]);
     const elapsedTotalSec = useMemo(() => {
         if (!verseDurationsSec) return null;
         const prior = verseDurationsSec.slice(0, currentVerseIndex).reduce((sum, d) => sum + (d || 0), 0);
@@ -1310,17 +1323,26 @@ export default function AudioPlayerLocal({
         const currentElapsed = currentDuration > 0
             ? Math.min(Math.max(0, relative), currentDuration)
             : Math.max(0, relative);
-        const s = speed || 1;
-        return (prior + currentElapsed) / s;
-    }, [verseDurationsSec, currentVerseIndex, elapsedTime, verseStartTime, speed]);
+        return prior + currentElapsed;
+    }, [verseDurationsSec, currentVerseIndex, elapsedTime, verseStartTime]);
 
     const remainingTotalSec = totalDurationSec !== null && elapsedTotalSec !== null
-        ? Math.max(0, totalDurationSec - elapsedTotalSec)
+        ? Math.max(0, totalDurationSec - elapsedTotalSec) / (speed || 1)
         : null;
 
     // Progress bar now fills during playback (time-based), fallback to verse count if durations unavailable
     const verseProgress = useMemo(() => {
-        if (isBasmalaPlaying) return totalVerses > 0 ? ((currentVerseIndex) / totalVerses) * 100 : 0;
+        if (isBasmalaPlaying) {
+            // The Basmala is an interstitial between two verses: the current
+            // verse has already finished. Count it as complete so the bar holds
+            // at the boundary instead of jumping a verse backwards, then
+            // continues smoothly when the next verse starts.
+            if (verseDurationsSec && totalDurationSec !== null && totalDurationSec > 0) {
+                const completed = verseDurationsSec.slice(0, currentVerseIndex + 1).reduce((sum, d) => sum + (d || 0), 0);
+                return Math.max(0, Math.min(100, (completed / totalDurationSec) * 100));
+            }
+            return totalVerses > 0 ? ((currentVerseIndex + 1) / totalVerses) * 100 : 0;
+        }
         if (totalDurationSec !== null && elapsedTotalSec !== null && totalDurationSec > 0) {
             return Math.max(0, Math.min(100, (elapsedTotalSec / totalDurationSec) * 100));
         }
@@ -1335,7 +1357,7 @@ export default function AudioPlayerLocal({
             return Math.max(0, Math.min(100, ((currentVerseIndex + clampedFraction) / totalVerses) * 100));
         }
         return totalVerses > 0 ? ((currentVerseIndex + 1) / totalVerses) * 100 : 0;
-    }, [totalDurationSec, elapsedTotalSec, currentVerseIndex, totalVerses, isBasmalaPlaying, elapsedTime, verseStartTime, verseEndTime]);
+    }, [totalDurationSec, elapsedTotalSec, currentVerseIndex, totalVerses, isBasmalaPlaying, elapsedTime, verseStartTime, verseEndTime, verseDurationsSec]);
     const safeVerseProgress = Number.isFinite(verseProgress) ? Math.max(0, Math.min(100, verseProgress)) : 0;
 
     // Metadata can be unavailable offline while the downloaded MP3 is ready.
@@ -1390,14 +1412,13 @@ export default function AudioPlayerLocal({
                 </div>
             <div className="player-controls">
                 <div className="time-display">
-                    {isBasmalaPlaying ? 'بِسْمِ ٱللَّهِ...' : (
-                        elapsedTotalSec !== null && totalDurationSec !== null ? (
-                            <>
-                                <span className="time-elapsed-total">{formatTime(elapsedTotalSec)} / {formatTime(totalDurationSec)}</span>
-                                {remainingTotalSec !== null && <span className="time-remaining" title="Time remaining"> −{formatTime(remainingTotalSec)}</span>}
-                            </>
-                        ) : `${currentVerseIndex + 1} / ${totalVerses}`
-                    )}
+                    {isBasmalaPlaying && <span className="time-basmala" title="Basmala before the next surah">بِسْمِ ٱللَّهِ...</span>}
+                    {elapsedTotalSec !== null && totalDurationSec !== null ? (
+                        <>
+                            <span className="time-elapsed-total">{formatTime(elapsedTotalSec)} / {formatTime(totalDurationSec)}</span>
+                            {remainingTotalSec !== null && <span className="time-remaining" title="Time remaining at the current speed"> −{formatTime(remainingTotalSec)}</span>}
+                        </>
+                    ) : `${currentVerseIndex + 1} / ${totalVerses}`}
                 </div>
                 <div className="control-buttons">
                     <button className="control-btn" onClick={() => { if (isBasmalaPlaying) cancelBasmala(); onVerseChange(Math.max(0, currentVerseIndex - 1)); }} disabled={currentVerseIndex === 0 && !isBasmalaPlaying}><SkipBack size={18} /></button>

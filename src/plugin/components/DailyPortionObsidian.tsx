@@ -464,6 +464,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     .quran-life-daily .progress-fill { height: 100%; background: var(--interactive-accent); transition: width 0.2s; }
     .quran-life-daily .player-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
     .quran-life-daily .time-display { font-size: 0.78em; color: var(--text-muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+    .quran-life-daily .time-basmala { font-family: var(--font-text, serif); color: color-mix(in srgb, var(--interactive-accent) 55%, var(--text-muted)); white-space: nowrap; }
     .quran-life-daily .time-remaining { opacity: 0.7; }
     .quran-life-daily .undo-complete-btn { border-color: var(--interactive-accent); color: var(--interactive-accent); }
     .quran-life-daily .control-buttons { display: flex; gap: 6px; align-items: center; }
