@@ -1324,12 +1324,10 @@ export default function AudioPlayerLocal({
         });
     }, [selectedReciter, verses, recitationData, recitationDataMap, verseWordCounts, measuredAudioDurations, averageSecondsPerWordBySurah]);
 
-    // Elapsed / total are in AUDIO time (the position inside the portion and
-    // its length). They must not depend on the playback speed: dividing them
-    // by the current speed rescaled the whole past retroactively, so switching
-    // speed made the readout collapse backwards (to 0:00 near the start) even
-    // though playback kept its position. Only the remaining-time estimate is
-    // speed-aware — that is the number that should change with speed.
+    // Raw audio time: the position inside the portion and its length. These
+    // stay speed-independent on purpose — the progress bar and the Basmala
+    // boundary compare them against each other, so any common division cancels
+    // out.
     const totalDurationSec = useMemo(() => { if (!verseDurationsSec) return null; const sum = verseDurationsSec.reduce((sum, d) => sum + (d || 0), 0); if (!(sum > 0)) return null; return sum; }, [verseDurationsSec]);
     const elapsedTotalSec = useMemo(() => {
         if (!verseDurationsSec) return null;
@@ -1347,8 +1345,17 @@ export default function AudioPlayerLocal({
         return prior + currentElapsed;
     }, [verseDurationsSec, currentVerseIndex, elapsedTime, verseStartTime]);
 
+    // Every readout — total, time spent and remaining — is WALL-CLOCK time at
+    // the current speed (audio time ÷ speed), so all three move together the
+    // moment the speed changes: at 2x a 20-minute portion reads 10:00 total and
+    // the spent time counts in real listened minutes. The portion is sized in
+    // 1x-minutes (target × speed), so the displayed total lands on the daily
+    // target at the speed the user is on.
+    const speedDivisor = Number.isFinite(speed) && speed > 0 ? speed : 1;
+    const totalDurationAtSpeedSec = totalDurationSec !== null ? totalDurationSec / speedDivisor : null;
+    const elapsedTotalAtSpeedSec = elapsedTotalSec !== null ? elapsedTotalSec / speedDivisor : null;
     const remainingTotalSec = totalDurationSec !== null && elapsedTotalSec !== null
-        ? Math.max(0, totalDurationSec - elapsedTotalSec) / (speed || 1)
+        ? Math.max(0, totalDurationSec - elapsedTotalSec) / speedDivisor
         : null;
 
     // Progress bar now fills during playback (time-based), fallback to verse count if durations unavailable
@@ -1433,9 +1440,9 @@ export default function AudioPlayerLocal({
                 </div>
             <div className="player-controls">
                 <div className="time-display">
-                    {elapsedTotalSec !== null && totalDurationSec !== null ? (
+                    {elapsedTotalAtSpeedSec !== null && totalDurationAtSpeedSec !== null ? (
                         <>
-                            <span className="time-elapsed-total">{formatTime(elapsedTotalSec)} / {formatTime(totalDurationSec)}</span>
+                            <span className="time-elapsed-total">{formatTime(elapsedTotalAtSpeedSec)} / {formatTime(totalDurationAtSpeedSec)}</span>
                             {remainingTotalSec !== null && <span className="time-remaining" title="Time remaining at the current speed"> −{formatTime(remainingTotalSec)}</span>}
                         </>
                     ) : `${currentVerseIndex + 1} / ${totalVerses}`}
