@@ -14,10 +14,13 @@ import { parseStarterZip } from '@/plugin/starterPackZip';
 import { buildShareZipBlob, defaultShareFileName } from '@/plugin/starterPackExport';
 import type { MindmapRecord } from '@/lib/anki/types';
 import type { App } from 'obsidian';
+import { Platform } from 'obsidian';
 import { buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
 import { Eye, Layers, PenTool, Split, Download, Upload, Trash2, Check, X, FileText, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import MindmapEditor from '@/plugin/components/MindmapEditorObsidian';
 import MindmapViewer from '@/plugin/components/MindmapViewerObsidian';
+// EXPERIMENTAL split mindmap view — remove this import with the feature.
+import { EXPERIMENTAL_SPLIT_MINDMAP_VIEW, MindmapSplitLayout } from '@/plugin/experimental/mindmapSplitView';
 
 const { useEffect, useMemo, useState, useCallback } = React;
 
@@ -50,6 +53,9 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [showMindmapEditor, setShowMindmapEditor] = useState(false);
+  // EXPERIMENTAL split mindmap view — desktop only. Remove with the feature.
+  const [isMindmapSplit, setIsMindmapSplit] = useState(false);
+  const canUseMindmapSplit = EXPERIMENTAL_SPLIT_MINDMAP_VIEW && Platform.isDesktopApp;
   const [editorInitialSnapshot, setEditorInitialSnapshot] = useState<MindmapSnapshot | null>(null);
   const [showAllVerses, setShowAllVerses] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
@@ -593,6 +599,8 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   }, [currentMindmap?.snapshot]);
   const closeMindmapEditor = useCallback(() => {
     setShowMindmapEditor(false);
+    // EXPERIMENTAL split mindmap view — always leave split mode on close.
+    setIsMindmapSplit(false);
   }, []);
 
   const handleDeleteMindmap = async () => {
@@ -798,33 +806,9 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
     padding: 16,
   };
 
-  // Embedded editor: renders inline inside the Obsidian ItemView content so the
-  // native tab header (tabs + title bar) stays visible for multitasking.
-  // Previously this used createPortal + position:fixed to document.body which
-  // covered the entire Obsidian window including the tab bar.
-  if (showMindmapEditor) {
-    return (
-      <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: '65vh', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--background-primary)', color: 'var(--text-normal)', margin: 0, padding: 0, gap: 0, alignSelf: 'stretch' }}>
-        <MindmapEditor
-          initialSnapshot={editorInitialSnapshot}
-          surahId={isPartOrMeta ? undefined : selectedSurah}
-          partId={isPartOrMeta ? Number(selectedMindmapKey.replace('part-', '').replace('meta-', '')) : undefined}
-          onSave={handleSaveMindmap}
-          onClose={closeMindmapEditor}
-          title={displayTitle}
-          vaultStore={vaultStore}
-        />
-        <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-          /* Editor fills the leaf edge-to-edge: kill the inherited view padding/gap
-             so there is no unused strip between the Obsidian tab bar and our top bar. */
-          .view-content.quran-life-anki { padding: 0 !important; margin: 0 !important; gap: 0 !important; }
-          .view-content.quran-life-anki > .quran-life-react-root { padding: 0 !important; margin: 0 !important; gap: 0 !important; }
-        `}</style>
-      </div>
-    );
-  }
-
-  return (
+  // The deck UI is built as an element so the experimental split view can show
+  // it next to the editor. In normal mode this is returned directly below.
+  const deckView = (
     <div className="quran-life-anki" style={{ position:'relative', padding:'16px', paddingBottom:'calc(16px + 96px + env(safe-area-inset-bottom, 0px))', maxWidth:720, margin:'0 auto', width:'100%', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
       {/* Header */}
       <div style={{ display:'flex', flexDirection:'column', gap:6, paddingBottom:12, borderBottom:'1px solid var(--background-modifier-border)' }}>
@@ -882,21 +866,26 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
             </div>
           </div>
           <div style={{ display:'flex', gap:6, alignItems:'stretch' }}>
-            <button onClick={()=>stepMindmap(-1)} title="Previous mindmap" aria-label="Previous mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronLeft size={16}/></button>
-            <select value={selectedMindmapKey} onChange={e=>setSelectedMindmapKey(e.target.value)} className="dropdown" style={{ flex:1, minWidth:0, padding:'10px 12px', minHeight:'40px', lineHeight:'1.4', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }}>
+            <button onClick={()=>stepMindmap(-1)} disabled={isMindmapSplit} title={isMindmapSplit ? 'Close the editor to switch mindmaps' : 'Previous mindmap'} aria-label="Previous mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor: isMindmapSplit ? 'not-allowed' : 'pointer', opacity: isMindmapSplit ? 0.5 : 1 }}><ChevronLeft size={16}/></button>
+            <select value={selectedMindmapKey} onChange={e=>setSelectedMindmapKey(e.target.value)} disabled={isMindmapSplit} title={isMindmapSplit ? 'Close the editor to switch mindmaps' : undefined} className="dropdown" style={{ flex:1, minWidth:0, padding:'10px 12px', minHeight:'40px', lineHeight:'1.4', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em', opacity: isMindmapSplit ? 0.6 : 1 }}>
               <optgroup label="Surahs">{SURAHS.filter(s => s.id !== 1).map(s=> <option key={`surah-${s.id}`} value={`surah-${s.id}`}>{s.id}. {s.arabicName} ({s.name})</option>)}</optgroup>
               <optgroup label="Parts & Meta"><option value="meta-0">Meta • Overview</option><option value="part-1">Part 1 • 1-5</option><option value="part-2">Part 2 • 6-9</option><option value="part-3">Part 3 • 10-24</option><option value="part-4">Part 4 • 25-33</option><option value="part-5">Part 5 • 34-49</option><option value="part-6">Part 6 • 50-66</option><option value="part-7">Part 7 • 67-114</option></optgroup>
             </select>
-            <button onClick={()=>stepMindmap(1)} title="Next mindmap" aria-label="Next mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronRight size={16}/></button>
+            <button onClick={()=>stepMindmap(1)} disabled={isMindmapSplit} title={isMindmapSplit ? 'Close the editor to switch mindmaps' : 'Next mindmap'} aria-label="Next mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor: isMindmapSplit ? 'not-allowed' : 'pointer', opacity: isMindmapSplit ? 0.5 : 1 }}><ChevronRight size={16}/></button>
           </div>
+          {isMindmapSplit && (
+            <span style={{ fontSize:'0.72em', color:'var(--text-faint)' }}>Mindmap switching is locked while the editor is open.</span>
+          )}
 
         </div>
 
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-          {currentMindmap?.snapshot ? <button onClick={()=>setShowMindmapPreview(v=>!v)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em' }}><Eye size={14}/>{showMindmapPreview?'Hide preview':'View'}</button> : null}
-          {currentMindmap?.snapshot ? <button onClick={()=>setShowDeleteConfirm(true)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--text-error)', color:'var(--text-error)', background:'var(--background-secondary)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em' }}><Trash2 size={14}/>Delete</button> : null}
-          <button onClick={openMindmapEditor} style={{ padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.85em', marginLeft:'auto' }}><PenTool size={14}/><span className="ql-edit-label-long">{currentMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</span><span className="ql-edit-label-short">{currentMindmap?.snapshot ? 'Edit' : 'Create'}</span></button>
-        </div>
+        {!showMindmapEditor && (
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {currentMindmap?.snapshot ? <button onClick={()=>setShowMindmapPreview(v=>!v)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em' }}><Eye size={14}/>{showMindmapPreview?'Hide preview':'View'}</button> : null}
+            {currentMindmap?.snapshot ? <button onClick={()=>setShowDeleteConfirm(true)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--text-error)', color:'var(--text-error)', background:'var(--background-secondary)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em' }}><Trash2 size={14}/>Delete</button> : null}
+            <button onClick={openMindmapEditor} style={{ padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.85em', marginLeft:'auto' }}><PenTool size={14}/><span className="ql-edit-label-long">{currentMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</span><span className="ql-edit-label-short">{currentMindmap?.snapshot ? 'Edit' : 'Create'}</span></button>
+          </div>
+        )}
 
         {currentMindmap?.snapshot && showMindmapPreview && !showMindmapEditor && (
           <div style={{ border:'1px solid var(--background-modifier-border)', borderRadius:10, overflow:'hidden', background:'var(--background-secondary)' }}>
@@ -1337,4 +1326,40 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       `}</style>
     </div>
   );
+
+  // EXPERIMENTAL split mindmap view — remove this branch with the feature.
+  // The editor is always rendered in the same tree position (inside the split
+  // layout) so toggling split/full screen never remounts tldraw.
+  if (showMindmapEditor) {
+    const editorPane = (
+      <MindmapEditor
+        initialSnapshot={editorInitialSnapshot}
+        surahId={isPartOrMeta ? undefined : selectedSurah}
+        partId={isPartOrMeta ? Number(selectedMindmapKey.replace('part-', '').replace('meta-', '')) : undefined}
+        onSave={handleSaveMindmap}
+        onClose={closeMindmapEditor}
+        title={displayTitle}
+        vaultStore={vaultStore}
+        onToggleSplit={canUseMindmapSplit ? () => setIsMindmapSplit((value) => !value) : undefined}
+        isSplit={canUseMindmapSplit && isMindmapSplit}
+      />
+    );
+    return (
+      <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: '65vh', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--background-primary)', color: 'var(--text-normal)', margin: 0, padding: 0, gap: 0, alignSelf: 'stretch' }}>
+        <MindmapSplitLayout
+          split={canUseMindmapSplit && isMindmapSplit}
+          deck={deckView}
+          editor={editorPane}
+        />
+        <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+          /* Editor fills the leaf edge-to-edge: kill the inherited view padding/gap
+             so there is no unused strip between the Obsidian tab bar and our top bar. */
+          .view-content.quran-life-anki { padding: 0 !important; margin: 0 !important; gap: 0 !important; overflow: hidden !important; }
+          .view-content.quran-life-anki > .quran-life-react-root { padding: 0 !important; margin: 0 !important; gap: 0 !important; height: 100% !important; }
+        `}</style>
+      </div>
+    );
+  }
+
+  return deckView;
 }

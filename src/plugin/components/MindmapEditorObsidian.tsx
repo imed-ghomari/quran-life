@@ -48,6 +48,8 @@ import {
     observeObsidianTopBar,
     observeTldrawWatermarkTitles,
 } from '@/plugin/lib/mindmapObsidianGuards';
+// EXPERIMENTAL split mindmap view — remove this import with the feature.
+import { MindmapSplitToggleButton } from '@/plugin/experimental/mindmapSplitView';
 import type { Editor, TLContent, TLRecord, TLShape, TLStore, TLStoreEventInfo, TLStoreSnapshot, TLUiOverrides } from 'tldraw';
 import type { MindmapSnapshot } from '@/lib/mindmapSnapshot';
 
@@ -225,6 +227,9 @@ interface MindmapEditorProps {
     docLink?: string | null;
     contextLabel?: string;
     vaultStore?: VaultStore;
+    // EXPERIMENTAL split mindmap view — remove with the feature.
+    onToggleSplit?: () => void;
+    isSplit?: boolean;
 }
 
 const extractContextFromTitle = (value?: string | null): string | null => {
@@ -311,7 +316,9 @@ function MindmapEditorContent({
     title,
     docLink,
     contextLabel,
-    vaultStore
+    vaultStore,
+    onToggleSplit,
+    isSplit
 }: MindmapEditorProps) {
     // Obsidian uses VaultStore exclusively. Do not import the web app's
     // InstantDB hook here: it is unavailable in Obsidian Mobile and this
@@ -561,6 +568,23 @@ function MindmapEditorContent({
     }, [activeInitialSnapshot]);
 
     useMindmapBackGestureGuard(true);
+
+    // EXPERIMENTAL split mindmap view — when the editor pane changes between
+    // full screen and split, fit the drawing to the new viewport so the user
+    // never has to zoom or scroll manually after resizing.
+    const wasSplitRef = useRef(isSplit);
+    useEffect(() => {
+        if (wasSplitRef.current === isSplit) return;
+        wasSplitRef.current = isSplit;
+        const timer = window.setTimeout(() => {
+            try {
+                editorRef.current?.zoomToFit({ animation: { duration: 220 } });
+            } catch {
+                /* camera fit is best-effort — never block editing */
+            }
+        }, 160);
+        return () => window.clearTimeout(timer);
+    }, [isSplit]);
 
     useEffect(() => {
         document.body.setAttribute('data-mindmap-open', 'true');
@@ -1207,28 +1231,34 @@ function MindmapEditorContent({
                         )
                     )}
                 </div>
-                <button
-                    onClick={() => { void handleClose(); }}
-                    className="mindmap-header-close"
-                    aria-label="Close editor"
-                    disabled={isExitActionPending}
-                    style={{
-                        marginLeft: 8,
-                        flexShrink: 0,
-                        padding: 8,
-                        borderRadius: 999,
-                        border: '1px solid transparent',
-                        background: 'transparent',
-                        color: 'var(--text-muted)',
-                        cursor: isExitActionPending ? 'wait' : 'pointer',
-                        opacity: isExitActionPending ? 0.6 : 1,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}
-                >
-                    <X size={20} />
-                </button>
+                <div className="mindmap-editor-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8, flexShrink: 0 }}>
+                    {/* EXPERIMENTAL split mindmap view — remove this block with the feature. */}
+                    {onToggleSplit && (
+                        <MindmapSplitToggleButton split={!!isSplit} onToggle={onToggleSplit} />
+                    )}
+                    <button
+                        onClick={() => { void handleClose(); }}
+                        className="mindmap-header-close"
+                        aria-label="Close editor"
+                        disabled={isExitActionPending}
+                        style={{
+                            marginLeft: 0,
+                            flexShrink: 0,
+                            padding: 8,
+                            borderRadius: 999,
+                            border: '1px solid transparent',
+                            background: 'transparent',
+                            color: 'var(--text-muted)',
+                            cursor: isExitActionPending ? 'wait' : 'pointer',
+                            opacity: isExitActionPending ? 0.6 : 1,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
             </div>
 
             <div className="tldraw-container" style={{
@@ -1249,6 +1279,9 @@ function MindmapEditorContent({
             </div>
             <style>{`@keyframes mindmap-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
               .mindmap-header-close:hover { background: var(--background-secondary); }
+              /* EXPERIMENTAL split mindmap view — hidden on phones/tablets. */
+              .mindmap-header-split:hover { background: var(--background-secondary); }
+              body.is-mobile .mindmap-header-split { display: none !important; }
               /* Phone-only (tablets/desktop untouched): lift the whole editor
                  below the top bar and above Obsidian's mobile toolbar — the
                  same approach as tldraw-in-obsidian
