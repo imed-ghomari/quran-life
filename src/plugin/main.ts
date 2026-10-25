@@ -84,11 +84,6 @@ export default class QuranLifePlugin extends Plugin {
 
     // Settings tab
     this.addSettingTab(new QuranLifeSettingTab(this.app, this));
-
-    // Status bar — mobile has no status bar, guard to avoid crash on isDesktopOnly:false
-    const statusEl = this.addStatusBarItem();
-    statusEl.setText("Quran Life ✓");
-    statusEl.title = "Quran Life: all changes save automatically";
   }
 
   onunload(): void {

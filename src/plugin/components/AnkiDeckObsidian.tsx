@@ -16,7 +16,7 @@ import type { MindmapRecord } from '@/lib/anki/types';
 import type { App } from 'obsidian';
 import { Platform } from 'obsidian';
 import { buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
-import { Eye, Layers, PenTool, Split, Download, Upload, Trash2, Check, X, FileText, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, Layers, PenTool, Split, Download, Upload, Trash2, Check, X, FileText, BarChart3, ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
 import MindmapEditor from '@/plugin/components/MindmapEditorObsidian';
 import MindmapViewer from '@/plugin/components/MindmapViewerObsidian';
 // EXPERIMENTAL split mindmap view — remove this import with the feature.
@@ -70,6 +70,10 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const { prefs: ankiExportPrefs } = useVaultAnkiExportPrefs(vaultStore);
   const [localAnchors, setLocalAnchors] = useState<AnkiAnchor[]>([]);
   const [editingDocText, setEditingDocText] = useState('');
+  // Notes textarea: expanded height follows the content so the whole note is
+  // visible without dragging the native resize handle.
+  const [notesExpanded, setNotesExpanded] = useState(false);
+  const notesTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   // Latest local splits for auto-flush on mindmap switch/unmount. Assigned during
   // render so switch-cleanups always read the freshest value (effect ordering safe).
   const localAnchorsRef = React.useRef<AnkiAnchor[]>([]);
@@ -87,6 +91,19 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const [allDocsForStats, setAllDocsForStats] = useState<Record<string, string>>({});
 
   useEffect(() => { setEditingDocText(docContent); }, [docContent]);
+  // Match the textarea height to its content while expanded; collapse back to
+  // the CSS min-height. `auto` first makes scrollHeight reflect the full text.
+  useEffect(() => {
+    const el = notesTextareaRef.current;
+    if (!el) return;
+    if (!notesExpanded) {
+      el.style.height = '';
+      return;
+    }
+    el.style.height = 'auto';
+    const borderHeight = el.offsetHeight - el.clientHeight;
+    el.style.height = `${el.scrollHeight + borderHeight}px`;
+  }, [notesExpanded, editingDocText]);
   // Adopt vault splits once the current surah has finished loading. The loading
   // guard prevents the previous surah's (now reset) anchors from clobbering the
   // new surah's editor, and a successful adopt clears the dirty flag.
@@ -940,12 +957,21 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         )}
 
           <div style={{ display:'flex', flexDirection:'column', gap:6, paddingTop:12, borderTop:'1px solid var(--background-modifier-border)' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
               <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
                 <FileText size={12}/> NOTES
               </span>
+              <button
+                onClick={() => setNotesExpanded(v => !v)}
+                title={notesExpanded ? 'Collapse notes' : 'Expand notes to show all text'}
+                aria-label={notesExpanded ? 'Collapse notes' : 'Expand notes to show all text'}
+                style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'5px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.8em', cursor:'pointer' }}
+              >
+                {notesExpanded ? <Minimize2 size={14}/> : <Maximize2 size={14}/>}
+                {notesExpanded ? 'Collapse' : 'Expand'}
+              </button>
             </div>
-            <textarea value={editingDocText} onChange={e=>setEditingDocText(e.target.value)} onBlur={() => void handleDocSave()} placeholder="Notes…" style={{ width:'100%', minHeight:90, padding:'10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em', lineHeight:1.5, resize:'vertical' }} />
+            <textarea ref={notesTextareaRef} value={editingDocText} onChange={e=>setEditingDocText(e.target.value)} onBlur={() => void handleDocSave()} placeholder="Notes…" style={{ width:'100%', minHeight:90, padding:'10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em', lineHeight:1.5, resize:'vertical' }} />
           </div>
       </div>
 

@@ -77,8 +77,9 @@ renamed it):
 └── anki-export.json      # Anki export order preferences
 ```
 
-Sync your vault with any file sync to keep your data in sync
-across devices. Offline recitation audio downloaded from the settings tab lives
+Sync your vault to keep your data in sync across devices. It works best with
+[Resilio Sync](https://www.resilio.com/sync/). It hasn't been tested with
+Syncthing or other sync services. Offline recitation audio downloaded from the settings tab lives
 inside the same data folder, in `data/offline-audio/` — syncing the whole
 `plugins/quran-life` folder covers everything. The location is fixed — there is deliberately no setting to move it —
 so every vault and every device syncs exactly one predictable directory.
