@@ -57,6 +57,11 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   // EXPERIMENTAL split mindmap view — desktop only. Remove with the feature.
   const [isMindmapSplit, setIsMindmapSplit] = useState(false);
   const canUseMindmapSplit = EXPERIMENTAL_SPLIT_MINDMAP_VIEW && Platform.isDesktopApp;
+  // Split view can switch mindmaps without closing the editor. The editor
+  // registers a save-before-switch handler here so the current drawing is
+  // flushed before the new mindmap mounts.
+  const editorSaveBeforeSwitchRef = React.useRef<(() => Promise<boolean>) | null>(null);
+  const [isSwitchingMindmap, setIsSwitchingMindmap] = useState(false);
   const [editorInitialSnapshot, setEditorInitialSnapshot] = useState<MindmapSnapshot | null>(null);
   const [showAllVerses, setShowAllVerses] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
@@ -557,13 +562,38 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   }, [vaultStore, showToast]);
 
   const mindmapOrder = useMemo(() => [...SURAHS.filter(s => s.id !== 1).map(s => `surah-${s.id}`), 'meta-0', 'part-1', 'part-2', 'part-3', 'part-4', 'part-5', 'part-6', 'part-7'], []);
+  // Switches the selected mindmap. In split view the editor stays open, so the
+  // current drawing is saved first and then the editor remounts on the new one.
+  const switchMindmap = useCallback(async (nextKey: string) => {
+    if (nextKey === selectedMindmapKey || isSwitchingMindmap) return;
+    const saveBeforeSwitch = editorSaveBeforeSwitchRef.current;
+    if (saveBeforeSwitch) {
+      setIsSwitchingMindmap(true);
+      try {
+        const saved = await saveBeforeSwitch();
+        if (!saved) {
+          showToast('Could not save the current mindmap — switch cancelled');
+          return;
+        }
+      } catch {
+        showToast('Could not save the current mindmap — switch cancelled');
+        return;
+      } finally {
+        setIsSwitchingMindmap(false);
+      }
+    }
+    // The editor is keyed by mindmap; clearing the frozen snapshot makes the
+    // remounted editor load the newly selected mindmap from the vault.
+    setEditorInitialSnapshot(null);
+    setSelectedMindmapKey(nextKey);
+  }, [selectedMindmapKey, isSwitchingMindmap, showToast]);
   const stepMindmap = useCallback((dir: 1 | -1) => {
-    setSelectedMindmapKey(prev => {
-      const i = mindmapOrder.indexOf(prev);
-      if (i === -1) return dir === 1 ? mindmapOrder[0] : mindmapOrder[mindmapOrder.length - 1];
-      return mindmapOrder[(i + dir + mindmapOrder.length) % mindmapOrder.length];
-    });
-  }, [mindmapOrder]);
+    const i = mindmapOrder.indexOf(selectedMindmapKey);
+    const nextKey = i === -1
+      ? (dir === 1 ? mindmapOrder[0] : mindmapOrder[mindmapOrder.length - 1])
+      : mindmapOrder[(i + dir + mindmapOrder.length) % mindmapOrder.length];
+    void switchMindmap(nextKey);
+  }, [mindmapOrder, selectedMindmapKey, switchMindmap]);
 
   const handleAddBreak = (val: number) => {
     const vc = surah?.verseCount; if (!vc) return;
@@ -856,7 +886,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         <div className="ql-export-row" style={{ display:'flex', gap:8, alignItems:'center' }}>
           <input value={deckName} onChange={e=>setDeckName(e.target.value)} placeholder="QuranLife::Review" style={{ flex:1, minWidth:0, padding:'8px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }} />
           <button onClick={() => void handleExport()} disabled={isExporting} style={{ ...toolbarButtonStyle, opacity:isExporting?0.7:1, cursor:isExporting?'not-allowed':'pointer' }}>
-            <Download size={14} /> {isExporting?'Exporting…':'Export to Anki'}
+            <Upload size={14} /> {isExporting?'Exporting…':'Export'}
           </button>
         </div>
         {ankiExportPrefs && (
@@ -884,15 +914,15 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
             </div>
           </div>
           <div style={{ display:'flex', gap:6, alignItems:'stretch' }}>
-            <button onClick={()=>stepMindmap(-1)} disabled={isMindmapSplit} title={isMindmapSplit ? 'Close the editor to switch mindmaps' : 'Previous mindmap'} aria-label="Previous mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor: isMindmapSplit ? 'not-allowed' : 'pointer', opacity: isMindmapSplit ? 0.5 : 1 }}><ChevronLeft size={16}/></button>
-            <select value={selectedMindmapKey} onChange={e=>setSelectedMindmapKey(e.target.value)} disabled={isMindmapSplit} title={isMindmapSplit ? 'Close the editor to switch mindmaps' : undefined} className="dropdown" style={{ flex:1, minWidth:0, padding:'10px 12px', minHeight:'40px', lineHeight:'1.4', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em', opacity: isMindmapSplit ? 0.6 : 1 }}>
+            <button onClick={()=>stepMindmap(-1)} disabled={isSwitchingMindmap} title={isSwitchingMindmap ? 'Saving current mindmap…' : 'Previous mindmap'} aria-label="Previous mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor: isSwitchingMindmap ? 'wait' : 'pointer', opacity: isSwitchingMindmap ? 0.5 : 1 }}><ChevronLeft size={16}/></button>
+            <select value={selectedMindmapKey} onChange={e=>{ void switchMindmap(e.target.value); }} disabled={isSwitchingMindmap} title={isSwitchingMindmap ? 'Saving current mindmap…' : undefined} className="dropdown" style={{ flex:1, minWidth:0, padding:'10px 12px', minHeight:'40px', lineHeight:'1.4', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em', opacity: isSwitchingMindmap ? 0.6 : 1 }}>
               <optgroup label="Surahs">{SURAHS.filter(s => s.id !== 1).map(s=> <option key={`surah-${s.id}`} value={`surah-${s.id}`}>{s.id}. {s.arabicName} ({s.name})</option>)}</optgroup>
               <optgroup label="Parts & Meta"><option value="meta-0">Meta • Overview</option><option value="part-1">Part 1 • 1-5</option><option value="part-2">Part 2 • 6-9</option><option value="part-3">Part 3 • 10-24</option><option value="part-4">Part 4 • 25-33</option><option value="part-5">Part 5 • 34-49</option><option value="part-6">Part 6 • 50-66</option><option value="part-7">Part 7 • 67-114</option></optgroup>
             </select>
-            <button onClick={()=>stepMindmap(1)} disabled={isMindmapSplit} title={isMindmapSplit ? 'Close the editor to switch mindmaps' : 'Next mindmap'} aria-label="Next mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor: isMindmapSplit ? 'not-allowed' : 'pointer', opacity: isMindmapSplit ? 0.5 : 1 }}><ChevronRight size={16}/></button>
+            <button onClick={()=>stepMindmap(1)} disabled={isSwitchingMindmap} title={isSwitchingMindmap ? 'Saving current mindmap…' : 'Next mindmap'} aria-label="Next mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor: isSwitchingMindmap ? 'wait' : 'pointer', opacity: isSwitchingMindmap ? 0.5 : 1 }}><ChevronRight size={16}/></button>
           </div>
           {isMindmapSplit && (
-            <span style={{ fontSize:'0.72em', color:'var(--text-faint)' }}>Mindmap switching is locked while the editor is open.</span>
+            <span style={{ fontSize:'0.72em', color:'var(--text-faint)' }}>{isSwitchingMindmap ? 'Saving current mindmap…' : 'Switch mindmaps here — the current one is saved first.'}</span>
           )}
 
         </div>
@@ -1360,6 +1390,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   if (showMindmapEditor) {
     const editorPane = (
       <MindmapEditor
+        key={selectedMindmapKey}
         initialSnapshot={editorInitialSnapshot}
         surahId={isPartOrMeta ? undefined : selectedSurah}
         partId={isPartOrMeta ? Number(selectedMindmapKey.replace('part-', '').replace('meta-', '')) : undefined}
@@ -1367,6 +1398,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         onClose={closeMindmapEditor}
         title={displayTitle}
         vaultStore={vaultStore}
+        saveBeforeSwitchRef={editorSaveBeforeSwitchRef}
         onToggleSplit={canUseMindmapSplit ? () => setIsMindmapSplit((value) => !value) : undefined}
         isSplit={canUseMindmapSplit && isMindmapSplit}
       />

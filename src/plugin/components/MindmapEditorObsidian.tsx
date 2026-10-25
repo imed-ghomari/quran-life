@@ -230,6 +230,8 @@ interface MindmapEditorProps {
     // EXPERIMENTAL split mindmap view — remove with the feature.
     onToggleSplit?: () => void;
     isSplit?: boolean;
+    // Lets the split-view deck save this mindmap before switching selection.
+    saveBeforeSwitchRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
 }
 
 const extractContextFromTitle = (value?: string | null): string | null => {
@@ -318,7 +320,8 @@ function MindmapEditorContent({
     contextLabel,
     vaultStore,
     onToggleSplit,
-    isSplit
+    isSplit,
+    saveBeforeSwitchRef
 }: MindmapEditorProps) {
     // Obsidian uses VaultStore exclusively. Do not import the web app's
     // InstantDB hook here: it is unavailable in Obsidian Mobile and this
@@ -904,6 +907,18 @@ function MindmapEditorContent({
         console.error('Mindmap editor exit prevented because latest save did not complete.');
         return false;
     }, [clearLocalDraft, flushPendingShapeTimestampUpdates, persistLocalDraft, saveContent, waitForSaveQueueToDrain]);
+
+    // Register the save-before-switch hook used by the split-view deck. The
+    // deck awaits it before changing the selected mindmap and remounting us.
+    useEffect(() => {
+        if (!saveBeforeSwitchRef) return;
+        saveBeforeSwitchRef.current = ensureSavedBeforeExit;
+        return () => {
+            if (saveBeforeSwitchRef.current === ensureSavedBeforeExit) {
+                saveBeforeSwitchRef.current = null;
+            }
+        };
+    }, [saveBeforeSwitchRef, ensureSavedBeforeExit]);
 
     const runExitAction = useCallback(async (action: () => void | Promise<void>) => {
         if (isExitActionInProgressRef.current) return;
