@@ -5,6 +5,7 @@ import { getQuranVerses, getSurah, getSurahsByPart, splitVerseDisplayWords, spli
 import { getDailyPortion } from '@/lib/dailyPortions';
 import { Verse, ACTIVE_PART_OPTIONS } from '@/lib/types';
 import { CheckCircle, BookOpen, Check, Headphones, Book, Undo2 } from 'lucide-react';
+import { toolbarButtonStyle } from '@/plugin/components/ui/buttonStyles';
 import { useVaultDailySettings, useVaultListeningProgress } from '@/plugin/hooks/useVaultDailyStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import type { App } from 'obsidian';
@@ -535,7 +536,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
           <h2 style={{ margin:0, fontSize:'1.35em', fontWeight:700, letterSpacing:'-0.01em' }}>Daily Portion</h2>
           <button
             onClick={openPluginSettings}
-            style={{ marginLeft:'auto', padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500 }}
+            style={{ ...toolbarButtonStyle, marginLeft:'auto' }}
           >
             Settings
           </button>

@@ -17,6 +17,7 @@ import type { App } from 'obsidian';
 import { Platform } from 'obsidian';
 import { buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
 import { Eye, Layers, PenTool, Split, Download, Upload, Trash2, Check, X, FileText, BarChart3, ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+import { toolbarButtonStyle } from '@/plugin/components/ui/buttonStyles';
 import MindmapEditor from '@/plugin/components/MindmapEditorObsidian';
 import MindmapViewer from '@/plugin/components/MindmapViewerObsidian';
 // EXPERIMENTAL split mindmap view — remove this import with the feature.
@@ -836,7 +837,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           <h2 style={{ margin:0, fontSize:'1.35em', fontWeight:700, letterSpacing:'-0.01em' }}>Anki Deck</h2>
           <button
             onClick={openPluginSettings}
-            style={{ marginLeft:'auto', padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500 }}
+            style={{ ...toolbarButtonStyle, marginLeft:'auto' }}
           >
             Settings
           </button>
@@ -854,8 +855,8 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         </div>
         <div className="ql-export-row" style={{ display:'flex', gap:8, alignItems:'center' }}>
           <input value={deckName} onChange={e=>setDeckName(e.target.value)} placeholder="QuranLife::Review" style={{ flex:1, minWidth:0, padding:'8px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }} />
-          <button onClick={() => void handleExport()} disabled={isExporting} style={{ padding:'8px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.9em', opacity:isExporting?0.7:1 }}>
-            <Download size={16} /> {isExporting?'Exporting…':'Export to Anki'}
+          <button onClick={() => void handleExport()} disabled={isExporting} style={{ ...toolbarButtonStyle, opacity:isExporting?0.7:1, cursor:isExporting?'not-allowed':'pointer' }}>
+            <Download size={14} /> {isExporting?'Exporting…':'Export to Anki'}
           </button>
         </div>
         {ankiExportPrefs && (
@@ -874,10 +875,10 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
               <PenTool size={12}/> MINDMAPS
             </span>
             <div className="ql-share-actions" style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
-              <button onClick={openStarterImport} style={{ padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500, display:'inline-flex', gap:6, alignItems:'center' }}>
+              <button onClick={openStarterImport} style={toolbarButtonStyle}>
                 <Download size={13}/> Import
               </button>
-              <button onClick={openShareExport} style={{ padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500, display:'inline-flex', gap:6, alignItems:'center' }}>
+              <button onClick={openShareExport} style={toolbarButtonStyle}>
                 <Upload size={13}/> Export
               </button>
             </div>
@@ -937,7 +938,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                   {showAllVerses && vc>60 && <button onClick={()=>setShowAllVerses(false)} style={{ padding:'4px 8px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', fontSize:'0.8em', cursor:'pointer' }}>Show less</button>}
                 </div>
                 <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-                  <button onClick={()=>setShowPreview(v=>!v)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-muted)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em', marginLeft:'auto' }}><Eye size={14}/>{showPreview ? 'Hide' : 'Preview'}</button>
+                  <button onClick={()=>setShowPreview(v=>!v)} style={{ ...toolbarButtonStyle, marginLeft:'auto' }}><Eye size={14}/>{showPreview ? 'Hide' : 'Preview'}</button>
                 </div>
               </div>
               {showPreview && (
@@ -965,7 +966,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                 onClick={() => setNotesExpanded(v => !v)}
                 title={notesExpanded ? 'Collapse notes' : 'Expand notes to show all text'}
                 aria-label={notesExpanded ? 'Collapse notes' : 'Expand notes to show all text'}
-                style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'5px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.8em', cursor:'pointer' }}
+                style={toolbarButtonStyle}
               >
                 {notesExpanded ? <Minimize2 size={14}/> : <Maximize2 size={14}/>}
                 {notesExpanded ? 'Collapse' : 'Expand'}
@@ -1001,7 +1002,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
               <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
                 <BarChart3 size={12}/> DECK STATISTICS
               </span>
-              <button onClick={()=>setShowStatsDetails(v=>!v)} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.8em', cursor:'pointer' }}>{showStatsDetails ? 'Hide details' : 'Show details'}</button>
+              <button onClick={()=>setShowStatsDetails(v=>!v)} style={toolbarButtonStyle}>{showStatsDetails ? 'Hide details' : 'Show details'}</button>
             </div>
             <div className="ql-stats-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))', gap:8 }}>
               {[
