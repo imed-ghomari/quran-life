@@ -103,12 +103,12 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
     const el = notesTextareaRef.current;
     if (!el) return;
     if (!notesExpanded) {
-      el.style.height = '';
+      el.setCssStyles({ height: '' });
       return;
     }
-    el.style.height = 'auto';
+    el.setCssStyles({ height: 'auto' });
     const borderHeight = el.offsetHeight - el.clientHeight;
-    el.style.height = `${el.scrollHeight + borderHeight}px`;
+    el.setCssStyles({ height: `${el.scrollHeight + borderHeight}px` });
   }, [notesExpanded, editingDocText]);
   // Adopt vault splits once the current surah has finished loading. The loading
   // guard prevents the previous surah's (now reset) anchors from clobbering the

@@ -231,7 +231,7 @@ interface MindmapEditorProps {
     onToggleSplit?: () => void;
     isSplit?: boolean;
     // Lets the split-view deck save this mindmap before switching selection.
-    saveBeforeSwitchRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
+    saveBeforeSwitchRef?: React.RefObject<(() => Promise<boolean>) | null>;
 }
 
 const extractContextFromTitle = (value?: string | null): string | null => {
